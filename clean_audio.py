@@ -46,13 +46,10 @@ def check_dependencies():
         print("[!] demucs is not installed. Installing it now...")
         run_command(f"{sys.executable} -m pip install -U demucs", "Installing Demucs")
 
-def clean_audio_pipeline(video_path, output_dir=None):
+def clean_audio_pipeline(video_path, output_dir=None, force=False):
     video_path = Path(video_path).resolve()
     if not video_path.exists():
         raise FileNotFoundError(f"File not found: {video_path}")
-
-    # Detect best device for GPU acceleration
-    device = get_best_device()
 
     # Use provided output directory or default to video's directory
     if output_dir:
@@ -62,11 +59,23 @@ def clean_audio_pipeline(video_path, output_dir=None):
         output_dir = video_path.parent
     
     base_name = video_path.stem
+    output_video = output_dir / f"{base_name}_clean.mp4"
+    
+    # Check if output already exists and is newer than input
+    if output_video.exists() and not force:
+        input_mtime = video_path.stat().st_mtime
+        output_mtime = output_video.stat().st_mtime
+        if output_mtime >= input_mtime:
+            print(f"[→] Skipping {video_path.name} (already processed)")
+            return False  # Indicates skipped
+    
+    # Detect best device for GPU acceleration
+    device = get_best_device()
+    
     temp_dir = output_dir / f"temp_{base_name}"
     
     # Define paths
     extracted_audio = temp_dir / "extracted_audio.wav"
-    output_video = output_dir / f"{base_name}_clean.mp4"
 
     # Create temp directory
     if temp_dir.exists():
@@ -113,12 +122,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Strip background noise/music from a video file.")
     parser.add_argument("video_path", help="Path to the input video file or directory")
     parser.add_argument("-o", "--output", help="Output directory (default: same as input)")
+    parser.add_argument("-f", "--force", action="store_true", help="Force reprocessing even if output exists")
     args = parser.parse_args()
 
     check_dependencies()
     
     input_path = Path(args.video_path).resolve()
     output_dir = args.output
+    force = args.force
     
     if not input_path.exists():
         print(f"[!] Path not found: {input_path}")
@@ -127,7 +138,7 @@ if __name__ == "__main__":
     video_extensions = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
     
     if input_path.is_file():
-        clean_audio_pipeline(input_path, output_dir)
+        clean_audio_pipeline(input_path, output_dir, force)
     elif input_path.is_dir():
         print(f"[*] Processing all videos in directory: {input_path}")
         videos = [p for p in input_path.iterdir() if p.suffix.lower() in video_extensions]
@@ -135,14 +146,25 @@ if __name__ == "__main__":
         if not videos:
             print("[!] No video files found in the specified directory.")
         
+        processed = 0
+        skipped = 0
+        failed = 0
+        
         for i, video_file in enumerate(videos, 1):
             print(f"\n[{i}/{len(videos)}] Processing: {video_file.name}")
             try:
-                clean_audio_pipeline(video_file, output_dir)
+                result = clean_audio_pipeline(video_file, output_dir, force)
+                if result is False:
+                    skipped += 1
+                else:
+                    processed += 1
             except Exception as e:
                 print(f"[!] Failed to process {video_file.name}: {e}")
-                # Continue with next file instead of crashing entirely
+                failed += 1
                 continue
+        
+        # Print summary
+        print(f"\n[✓] Summary: {processed} processed, {skipped} skipped, {failed} failed")
     else:
         print("[!] Input must be a valid file or directory.")
         exit(1)
