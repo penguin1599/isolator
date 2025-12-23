@@ -1,10 +1,55 @@
-# Ignore input/output contents
+# ===== Input/Output =====
+# Video files in input/output directories
 input/*.mp4
 input/*.mov
 input/*.mkv
 input/*.avi
 input/*.webm
+input/*.wav
 output/*.mp4
+output/*.wav
+
+# Temp processing directories
 temp_*/
-# Model cache (downloaded by demucs)
+
+# ===== Model Cache =====
+# Demucs/PyTorch model checkpoints (large files)
 models/
+*.th
+*.pt
+*.pth
+*.onnx
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+pip-log.txt
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===== Docker =====
+# Don't ignore Dockerfiles, but ignore build context artifacts
+*.log
+
+# ===== OS =====
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# ===== Test files =====
+test.wav
+test_output.mp4
+demucs_out/

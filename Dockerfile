@@ -17,10 +17,13 @@ RUN ln -sf /usr/bin/python3.10 /usr/bin/python
 # Set working directory
 WORKDIR /app
 
+# Install libsndfile for soundfile audio backend
+RUN apt-get update && apt-get install -y libsndfile1 && rm -rf /var/lib/apt/lists/*
+
 # Install PyTorch stable (for RTX 30xx/40xx and older) and Demucs
 RUN pip install --no-cache-dir \
     torch torchaudio --index-url https://download.pytorch.org/whl/cu121 \
-    && pip install --no-cache-dir demucs
+    && pip install --no-cache-dir scipy soundfile demucs
 
 # Copy application code
 COPY clean_audio.py .
