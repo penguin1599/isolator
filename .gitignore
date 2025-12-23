@@ -6,3 +6,5 @@ input/*.avi
 input/*.webm
 output/*.mp4
 temp_*/
+# Model cache (downloaded by demucs)
+models/
