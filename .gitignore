@@ -1,0 +1,8 @@
+# Ignore input/output contents
+input/*.mp4
+input/*.mov
+input/*.mkv
+input/*.avi
+input/*.webm
+output/*.mp4
+temp_*/
