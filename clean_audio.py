@@ -88,26 +88,55 @@ def clean_audio_pipeline(video_path, output_dir=None, force=False):
         run_command(cmd_extract, "Extracting audio from video")
 
         # Step 2: Separate Audio using Demucs
-        # -n htdemucs is the default high quality model
-        # --two-stems=vocals implies we only want to split into 'vocals' and 'no_vocals' (everything else)
+        # -n htdemucs_ft is the fine-tuned high quality model (better than htdemucs)
+        # --two-stems=vocals splits into 'vocals' and 'no_vocals' (everything else)
+        # --shifts 5 improves quality by processing multiple shifted versions
         # -d specifies the device (cuda, mps, or cpu)
-        cmd_separate = f'"{sys.executable}" -m demucs -n htdemucs --two-stems=vocals -d {device} "{extracted_audio}" -o "{temp_dir}"'
+        cmd_separate = f'"{sys.executable}" -m demucs -n htdemucs_ft --two-stems=vocals --shifts 5 -d {device} "{extracted_audio}" -o "{temp_dir}"'
         run_command(cmd_separate, f"Separating audio tracks (using {device.upper()})")
 
-        # Demucs output structure: <out_dir>/htdemucs/<track_name>/vocals.wav
-        # Since we passed a full path to demucs, the track name matches the filename 'extracted_audio'
-        separated_vocals = temp_dir / "htdemucs" / "extracted_audio" / "vocals.wav"
+        # Demucs output structure: <out_dir>/htdemucs_ft/<track_name>/vocals.wav
+        separated_vocals = temp_dir / "htdemucs_ft" / "extracted_audio" / "vocals.wav"
 
         if not separated_vocals.exists():
              raise FileNotFoundError(f"Could not find separated vocals at: {separated_vocals}\n    Contents of temp dir: {list(temp_dir.rglob('*'))}")
 
-        # Step 3: Remux Video with Clean Audio
+        # Step 3: Apply noise reduction for additional cleanup
+        # This removes residual noise and enhances speech clarity
+        enhanced_vocals = temp_dir / "vocals_enhanced.wav"
+        try:
+            import noisereduce as nr
+            import soundfile as sf
+            import numpy as np
+            
+            print("[*] Applying noise reduction...")
+            # Load the vocals
+            audio_data, sample_rate = sf.read(str(separated_vocals))
+            
+            # Apply stationary noise reduction
+            # prop_decrease controls how much noise is removed (0.0-1.0)
+            reduced_noise = nr.reduce_noise(
+                y=audio_data, 
+                sr=sample_rate,
+                prop_decrease=0.8,  # Moderate noise reduction
+                stationary=True,
+                n_jobs=-1  # Use all CPU cores
+            )
+            
+            # Save the enhanced audio
+            sf.write(str(enhanced_vocals), reduced_noise, sample_rate)
+            print(f"[*] Noise reduction complete")
+        except Exception as e:
+            print(f"[!] Noise reduction failed ({e}), using demucs output")
+            enhanced_vocals = separated_vocals
+
+        # Step 4: Remux Video with Clean Audio
         # -map 0:v:0 -> take video stream from input 0 (original video)
-        # -map 1:a:0 -> take audio stream from input 1 (vocals.wav)
+        # -map 1:a:0 -> take audio stream from input 1 (enhanced vocals)
         # -c:v copy -> copy video stream without re-encoding
         # -c:a aac -> encode audio to AAC
         # -ignore_unknown -> skip unknown/unsupported streams like timecode
-        cmd_remux = f'ffmpeg -i "{video_path}" -i "{separated_vocals}" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 320k -ignore_unknown "{output_video}" -y'
+        cmd_remux = f'ffmpeg -i "{video_path}" -i "{enhanced_vocals}" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 320k -ignore_unknown "{output_video}" -y'
         run_command(cmd_remux, "Combining video with clean audio")
 
         print(f"[\u2713] Done! Clean video saved to: {output_video}")

@@ -22,10 +22,11 @@ RUN apt-get update && apt-get install -y libsndfile1 && rm -rf /var/lib/apt/list
 
 # Install PyTorch nightly with CUDA 12.8 (supports RTX 5090/Blackwell sm_120) and Demucs
 # Install torchcodec from nightly to match the PyTorch version
+# noisereduce provides additional noise reduction for cleaner speech
 RUN pip3 install --no-cache-dir --pre \
     torch torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 \
     && pip3 install --no-cache-dir --pre torchcodec --index-url https://download.pytorch.org/whl/nightly/cu128 \
-    && pip install --no-cache-dir scipy soundfile demucs
+    && pip install --no-cache-dir scipy soundfile demucs noisereduce
 
 # Copy application code
 COPY clean_audio.py .
