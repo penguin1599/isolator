@@ -11,7 +11,7 @@ def run_command(command, description):
         subprocess.run(command, check=True, shell=True)
     except subprocess.CalledProcessError as e:
         print(f"[!] Error during {description}: {e}")
-        exit(1)
+        raise e
 
 def check_dependencies():
     """Check if ffmpeg and demucs are installed."""
@@ -29,8 +29,7 @@ def check_dependencies():
 def clean_audio_pipeline(video_path):
     video_path = Path(video_path).resolve()
     if not video_path.exists():
-        print(f"[!] File not found: {video_path}")
-        exit(1)
+        raise FileNotFoundError(f"File not found: {video_path}")
 
     project_dir = video_path.parent
     base_name = video_path.stem
@@ -61,9 +60,7 @@ def clean_audio_pipeline(video_path):
         separated_vocals = temp_dir / "htdemucs" / "extracted_audio" / "vocals.wav"
 
         if not separated_vocals.exists():
-             print(f"[!] Could not find separated vocals at: {separated_vocals}")
-             print(f"    Contents of temp dir: {list(temp_dir.rglob('*'))}")
-             exit(1)
+             raise FileNotFoundError(f"Could not find separated vocals at: {separated_vocals}\n    Contents of temp dir: {list(temp_dir.rglob('*'))}")
 
         # Step 3: Remux Video with Clean Audio
         # -map 0:v:0 -> take video stream from input 0 (original video)
@@ -87,4 +84,31 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     check_dependencies()
-    clean_audio_pipeline(args.video_path)
+    
+    input_path = Path(args.video_path).resolve()
+    if not input_path.exists():
+        print(f"[!] Path not found: {input_path}")
+        exit(1)
+
+    video_extensions = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
+    
+    if input_path.is_file():
+        clean_audio_pipeline(input_path)
+    elif input_path.is_dir():
+        print(f"[*] Processing all videos in directory: {input_path}")
+        videos = [p for p in input_path.iterdir() if p.suffix.lower() in video_extensions]
+        
+        if not videos:
+            print("[!] No video files found in the specified directory.")
+        
+        for i, video_file in enumerate(videos, 1):
+            print(f"\n[{i}/{len(videos)}] Processing: {video_file.name}")
+            try:
+                clean_audio_pipeline(video_file)
+            except Exception as e:
+                print(f"[!] Failed to process {video_file.name}: {e}")
+                # Continue with next file instead of crashing entirely
+                continue
+    else:
+        print("[!] Input must be a valid file or directory.")
+        exit(1)
